@@ -10,7 +10,8 @@ jobs:
         run: |
           git clone https://github.com/bmax121/KernelPatch.git
           cd KernelPatch
-          ./build.sh sdk
+          chmod +x build.sh
+          ./build.sh kpmsdk
       - name: Build KPM
         run: |
           CC=$PWD/KernelPatch/kpmsdk/bin/clang
