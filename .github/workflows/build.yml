@@ -10,11 +10,11 @@ jobs:
         run: |
           git clone https://github.com/bmax121/KernelPatch.git
           cd KernelPatch
-          make kpmsdk
+          ./build.sh sdk
       - name: Build KPM
         run: |
-          CC=$PWD/KernelPatch/kpmsdk/clang/bin/clang
-          $CC -shared -fPIC -I KernelPatch/kpm/include -o kpm/rt_kpm.kpm kpm/rt_kpm.c
+          CC=$PWD/KernelPatch/kpmsdk/bin/clang
+          $CC -shared -fPIC -I KernelPatch/kpmsdk/include -o kpm/rt_kpm.kpm kpm/rt_kpm.c
       - uses: actions/upload-artifact@v4
         with:
           name: rt_kpm_driver
