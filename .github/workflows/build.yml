@@ -1,0 +1,35 @@
+name: Build KPM & Daemon
+on: [push, workflow_dispatch]
+
+jobs:
+  build-kpm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup KernelPatch SDK
+        run: |
+          git clone https://github.com/bmax121/KernelPatch.git
+          cd KernelPatch
+          make kpmsdk
+      - name: Build KPM
+        run: |
+          CC=$PWD/KernelPatch/kpmsdk/clang/bin/clang
+          $CC -shared -fPIC -I KernelPatch/kpm/include -o kpm/rt_kpm.kpm kpm/rt_kpm.c
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rt_kpm_driver
+          path: kpm/rt_kpm.kpm
+
+  build-daemon:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: android-actions/setup-android@v3
+      - name: Build Daemon
+        run: |
+          CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android31-clang
+          $CC -O2 -static -pthread -o daemon/nyxd daemon/nyxd.c
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nyxd_bin
+          path: daemon/nyxd
