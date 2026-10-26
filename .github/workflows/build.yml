@@ -38,3 +38,4 @@ jobs:
         with:
           name: nyxd_bin
           path: daemon/nyxd
+# forcing update - no external action
