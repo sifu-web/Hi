@@ -11,7 +11,21 @@ jobs:
         run: |
           mkdir -p kpm daemon
           cat << 'INNER_EOF' > kpm/rt_kpm.c
-          #include "kpatch.h"
+          #include <linux/module.h>
+          #include <linux/fs.h>
+          #include <linux/uaccess.h>
+          #include <linux/miscdevice.h>
+
+          #define kp_get_symbol(name, _) __kp_get_symbol(name)
+          extern void *__kp_get_symbol(const char *name);
+          extern int __kp_mod_init(void);
+          extern void __kp_mod_exit(void);
+
+          #define KPM_NAME(x) const char __kpm_name[] __attribute__((section(".kpm.name"))) = x;
+          #define KPM_VERSION(x) const char __kpm_version[] __attribute__((section(".kpm.version"))) = x;
+          #define KPM_LICENSE(x) const char __kpm_license[] __attribute__((section(".kpm.license"))) = x;
+          #define KPM_AUTHOR(x) const char __kpm_author[] __attribute__((section(".kpm.author"))) = x;
+          #define KPM_DESCRIPTION(x) const char __kpm_description[] __attribute__((section(".kpm.description"))) = x;
 
           KPM_NAME("rt_kpm");
           KPM_VERSION("1.0");
@@ -22,12 +36,7 @@ jobs:
           #define DEVICE_NAME "rt_kpm"
           #define RT_MAGIC    'R'
 
-          struct rw_req {
-              int pid;
-              unsigned long addr;
-              void *buf;
-              unsigned long size;
-          };
+          struct rw_req { pid_t pid; uintptr_t addr; void *buf; size_t size; };
           #define IOCTL_READ  _IOWR(RT_MAGIC, 1, struct rw_req)
           #define IOCTL_WRITE _IOWR(RT_MAGIC, 2, struct rw_req)
 
@@ -38,42 +47,30 @@ jobs:
           static struct mm_struct *(*get_mm_fn)(struct task_struct *);
           static void (*put_mm_fn)(struct mm_struct *);
           static void (*put_task_fn)(struct task_struct *);
-          static void *(*kzalloc_fn)(unsigned long, unsigned int);
+          static void *(*kzalloc_fn)(size_t, gfp_t);
           static void (*kfree_fn)(const void *);
 
           static long rt_ioctl(struct file *file, unsigned int cmd, unsigned long arg) {
               struct rw_req req;
               if (copy_from_user(&req, (void __user *)arg, sizeof(req))) return -EFAULT;
-              
               struct pid *pid_struct = find_pid_fn(req.pid);
               if (!pid_struct) return -ESRCH;
               struct task_struct *task = get_pid_task_fn(pid_struct, 0);
               put_pid_fn(pid_struct);
               if (!task) return -ESRCH;
-              
               struct mm_struct *mm = get_mm_fn(task);
               if (!mm) { put_task_fn(task); return -EINVAL; }
-              
-              void *kern_buf = kzalloc_fn(req.size, 0x10 | 0x80); // GFP_KERNEL = 0x10 | 0x80
+              void *kern_buf = kzalloc_fn(req.size, 0xCC0); // GFP_KERNEL
               if (!kern_buf) { put_mm_fn(mm); put_task_fn(task); return -ENOMEM; }
 
               if (cmd == IOCTL_READ) {
-                  if (apv_fn(task, req.addr, kern_buf, req.size, 0) == req.size) {
-                      copy_to_user(req.buf, kern_buf, req.size);
-                  } else {
-                      req.size = 0;
-                  }
+                  if (apv_fn(task, req.addr, kern_buf, req.size, 0) == req.size) copy_to_user(req.buf, kern_buf, req.size);
+                  else req.size = 0;
               } else if (cmd == IOCTL_WRITE) {
-                  if (copy_from_user(kern_buf, req.buf, req.size) == 0) {
-                      apv_fn(task, req.addr, kern_buf, req.size, 0x01); // FOLL_WRITE = 0x01
-                  } else {
-                      req.size = 0;
-                  }
+                  if (copy_from_user(kern_buf, req.buf, req.size) == 0) apv_fn(task, req.addr, kern_buf, req.size, 1);
+                  else req.size = 0;
               }
-              
-              kfree_fn(kern_buf); 
-              put_mm_fn(mm); 
-              put_task_fn(task);
+              kfree_fn(kern_buf); put_mm_fn(mm); put_task_fn(task);
               copy_to_user((void __user *)arg, &req, sizeof(req));
               return 0;
           }
@@ -90,25 +87,24 @@ jobs:
               .mode = 0666 
           };
 
-          int __init kpm_init(const char *args, const char *event, void *__user reserved) {
-              apv_fn = kp_get_symbol("access_process_vm");
-              find_pid_fn = kp_get_symbol("find_get_pid");
-              get_pid_task_fn = kp_get_symbol("get_pid_task");
-              put_pid_fn = kp_get_symbol("put_pid");
-              get_mm_fn = kp_get_symbol("get_task_mm");
-              put_mm_fn = kp_get_symbol("mmput");
-              put_task_fn = kp_get_symbol("put_task_struct");
-              kzalloc_fn = kp_get_symbol("kzalloc");
-              kfree_fn = kp_get_symbol("kfree");
-              int (*misc_reg)(struct miscdevice *) = kp_get_symbol("misc_register");
-              
+          int __init kpm_init(void) {
+              apv_fn = kp_get_symbol("access_process_vm", 0);
+              find_pid_fn = kp_get_symbol("find_get_pid", 0);
+              get_pid_task_fn = kp_get_symbol("get_pid_task", 0);
+              put_pid_fn = kp_get_symbol("put_pid", 0);
+              get_mm_fn = kp_get_symbol("get_task_mm", 0);
+              put_mm_fn = kp_get_symbol("mmput", 0);
+              put_task_fn = kp_get_symbol("put_task_struct", 0);
+              kzalloc_fn = kp_get_symbol("kzalloc", 0);
+              kfree_fn = kp_get_symbol("kfree", 0);
+              int (*misc_reg)(struct miscdevice *) = kp_get_symbol("misc_register", 0);
               if (!apv_fn || !misc_reg) return -1;
               misc_reg(&rt_misc);
               return 0;
           }
 
-          void __exit kpm_exit(void *__user reserved) {
-              void (*misc_dereg)(struct miscdevice *) = kp_get_symbol("misc_deregister");
+          void __exit kpm_exit(void) {
+              void (*misc_dereg)(struct miscdevice *) = kp_get_symbol("misc_deregister", 0);
               if (misc_dereg) misc_dereg(&rt_misc);
           }
           INNER_EOF
@@ -132,7 +128,7 @@ jobs:
           #define DEV_PATH   "/dev/rt_kpm"
           #define RT_MAGIC   'R'
 
-          struct rw_req { int pid; uintptr_t addr; void *buf; size_t size; };
+          struct rw_req { pid_t pid; uintptr_t addr; void *buf; size_t size; };
           #define IOCTL_READ  _IOWR(RT_MAGIC, 1, struct rw_req)
           #define IOCTL_WRITE _IOWR(RT_MAGIC, 2, struct rw_req)
 
@@ -156,7 +152,7 @@ jobs:
               static __thread uint8_t tls_buf[1 << 20];
               for (;;) {
                   req_t r; if (read(c, &r, sizeof(r)) <= 0) break;
-                  int pid = (int)(r.size >> 32); size_t size = (size_t)(uint32_t)r.size;
+                  pid_t pid = (pid_t)(r.size >> 32); size_t size = (size_t)(uint32_t)r.size;
                   if (size > sizeof(tls_buf)) size = sizeof(tls_buf);
                   struct rw_req ireq = { .pid = pid, .addr = r.addr, .buf = tls_buf, .size = size };
 
