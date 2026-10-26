@@ -7,14 +7,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Download Ready-Made KernelPatch SDK
+      - name: Download KernelPatch SDK
         run: |
-          LATEST_URL=$(curl -s https://api.github.com/repos/bmax121/KernelPatch/releases/latest | grep "browser_download_url.*kpmsdk-linux-x86_64.zip" | cut -d '"' -f 4)
-          if [ -z "$LATEST_URL" ]; then 
-            LATEST_URL="https://github.com/bmax121/KernelPatch/releases/download/v0.11.2/kpmsdk-linux-x86_64.zip"
-          fi
-          wget "$LATEST_URL" -O kpmsdk.zip
-          unzip kpmsdk.zip
+          wget https://github.com/bmax121/KernelPatch/releases/latest/download/kpmsdk-linux-x86_64.tar.gz
+          tar -xzf kpmsdk-linux-x86_64.tar.gz
           
       - name: Compile KPM
         run: |
