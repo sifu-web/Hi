@@ -16,9 +16,10 @@ jobs:
           echo "y" | sudo ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --install "ndk;26.1.10909125" --sdk_root=${ANDROID_SDK_ROOT}
           echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/26.1.10909125" >> $GITHUB_ENV
           
-      - name: Compile KPM (Using kpm-spore)
+      - name: Fix kpatch.h path & Compile KPM
         run: |
           cp kpm/rt_kpm.c kpm-spore/modules/hello/module.c
+          sed -i 's|include_directories(${KP_DIR}/kernel/include)|include_directories(${KP_DIR}/kernel/include)\ninclude_directories(${KP_DIR}/kernel/patch/include)|' kpm-spore/modules/hello/CMakeLists.txt
           cd kpm-spore
           export NDK_PATH=${ANDROID_HOME}/ndk/26.1.10909125
           ./build.sh
