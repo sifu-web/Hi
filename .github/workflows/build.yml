@@ -6,13 +6,16 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
-      - name: Fetch KernelPatch SDK
+      - name: Setup Android NDK
         run: |
-          git clone --recursive https://github.com/bmax121/KernelPatch.git
+          echo "y" | sudo ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --install "ndk;26.1.10909125" --sdk_root=${ANDROID_SDK_ROOT}
+      - name: Fetch KernelPatch Headers
+        run: |
+          git clone https://github.com/bmax121/KernelPatch.git
       - name: Compile KPM
         run: |
-          CC=$PWD/KernelPatch/kpmsdk/bin/clang
-          $CC -shared -fPIC -I $PWD/KernelPatch/kpmsdk/include -o kpm/rt_kpm.kpm kpm/rt_kpm.c
+          CC=${ANDROID_HOME}/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android31-clang
+          $CC -shared -fPIC -I KernelPatch/kpm/include -o kpm/rt_kpm.kpm kpm/rt_kpm.c
       - uses: actions/upload-artifact@v4
         with:
           name: rt_kpm_driver
