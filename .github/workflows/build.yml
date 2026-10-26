@@ -20,6 +20,7 @@ jobs:
         run: |
           cp kpm/rt_kpm.c kpm-spore/modules/hello/module.c
           cd kpm-spore
+          export NDK_PATH=${ANDROID_HOME}/ndk/26.1.10909125
           ./build.sh
           cp build/hello/hello.kpm ../kpm/rt_kpm.kpm
           
