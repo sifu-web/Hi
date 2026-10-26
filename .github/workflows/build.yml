@@ -2,37 +2,37 @@ name: Build KPM & Daemon
 on: [push, workflow_dispatch]
 
 jobs:
-  build-kpm:
+  build-all:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
+      
       - name: Setup Android NDK
         run: |
           echo "y" | sudo ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --install "ndk;26.1.10909125" --sdk_root=${ANDROID_SDK_ROOT}
+          
       - name: Fetch KernelPatch Headers
         run: |
           git clone https://github.com/bmax121/KernelPatch.git
+          
       - name: Compile KPM
         run: |
           CC=${ANDROID_HOME}/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android31-clang
           $CC -shared -fPIC -I KernelPatch/kpm/include -o kpm/rt_kpm.kpm kpm/rt_kpm.c
-      - uses: actions/upload-artifact@v4
-        with:
-          name: rt_kpm_driver
-          path: kpm/rt_kpm.kpm
-
-  build-daemon:
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup Android NDK
-        run: |
-          echo "y" | sudo ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --install "ndk;26.1.10909125" --sdk_root=${ANDROID_SDK_ROOT}
+          
       - name: Build Daemon
         run: |
           CC=${ANDROID_HOME}/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android31-clang
           $CC -O2 -static -pthread -o daemon/nyxd daemon/nyxd.c
-      - uses: actions/upload-artifact@v4
+          
+      - name: Upload KPM
+        uses: actions/upload-artifact@v4
+        with:
+          name: rt_kpm_driver
+          path: kpm/rt_kpm.kpm
+          
+      - name: Upload Daemon
+        uses: actions/upload-artifact@v4
         with:
           name: nyxd_bin
           path: daemon/nyxd
