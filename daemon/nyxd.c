@@ -36,24 +36,20 @@ static void *conn_thread(void *arg) {
     uid_t uid = (uid_t)-1;
     if (getsockopt(c, SOL_SOCKET, SO_PEERCRED, &cred, &cl) == 0) uid = cred.uid;
     if (!is_allowed(uid)) { req_t deny = {0xFFFFFFFF, 0, 0, 0, 0}; write(c, &deny, sizeof(deny)); close(c); return NULL; }
-    
     static __thread uint8_t tls_buf[1 << 20];
     for (;;) {
         req_t r; if (read(c, &r, sizeof(r)) <= 0) break;
         pid_t pid = (pid_t)(r.size >> 32); size_t size = (size_t)(uint32_t)r.size;
         if (size > sizeof(tls_buf)) size = sizeof(tls_buf);
         struct rw_req ireq = { .pid = pid, .addr = r.addr, .buf = tls_buf, .size = size };
-
         if (r.op == 0) {
             if (ioctl(g_fd, IOCTL_READ, &ireq) < 0) ireq.size = 0;
-            r.addr = ireq.size; 
-            if (write(c, &r, sizeof(r)) != sizeof(r)) break;
+            r.addr = ireq.size; if (write(c, &r, sizeof(r)) != sizeof(r)) break;
             if (ireq.size > 0 && write(c, tls_buf, ireq.size) != ireq.size) break;
         } else if (r.op == 1) {
             if (read(c, tls_buf, size) != (ssize_t)size) break;
             if (ioctl(g_fd, IOCTL_WRITE, &ireq) < 0) ireq.size = 0;
-            r.addr = ireq.size; 
-            if (write(c, &r, sizeof(r)) != sizeof(r)) break;
+            r.addr = ireq.size; if (write(c, &r, sizeof(r)) != sizeof(r)) break;
         }
     }
     close(c); return NULL;
