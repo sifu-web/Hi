@@ -7,23 +7,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Download KernelPatch SDK
+      - name: Clone KernelPatch & Template
         run: |
-          wget https://github.com/bmax121/KernelPatch/releases/latest/download/kpmsdk-linux-x86_64.tar.gz
-          tar -xzf kpmsdk-linux-x86_64.tar.gz
-          
-      - name: Compile KPM
-        run: |
-          CC=$PWD/kpmsdk/bin/clang
-          $CC -shared -fPIC -I $PWD/kpmsdk/include -o kpm/rt_kpm.kpm kpm/rt_kpm.c
+          rm -rf KernelPatch KPM-Build-Anywhere
+          git clone https://github.com/bmax121/KernelPatch.git
+          cd KernelPatch && git submodule update --init --recursive && cd ..
+          git clone https://github.com/udochina/KPM-Build-Anywhere.git
           
       - name: Setup Android NDK
         run: |
           echo "y" | sudo ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --install "ndk;26.1.10909125" --sdk_root=${ANDROID_SDK_ROOT}
+          echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/26.1.10909125" >> $GITHUB_ENV
           
-      - name: Build Daemon
+      - name: Compile KPM (Using Template)
         run: |
-          CC=${ANDROID_HOME}/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android31-clang
+          cp kpm/rt_kpm.c KPM-Build-Anywhere/hello.c
+          cd KPM-Build-Anywhere
+          make NDK_PATH=$ANDROID_NDK_HOME KP_DIR=$PWD/../KernelPatch
+          cp hello.kpm ../kpm/rt_kpm.kpm
+          
+      - name: Compile Daemon
+        run: |
+          CC=${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android31-clang
           $CC -O2 -static -pthread -o daemon/nyxd daemon/nyxd.c
           
       - name: Upload KPM Artifact
