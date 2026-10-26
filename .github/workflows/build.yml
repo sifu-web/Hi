@@ -6,14 +6,22 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
-      - name: Build KPM
-        uses: bmax121/kpm-build-action@v1
-        with:
-          kpm-dir: './kpm'
+      - name: Install Cross Compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+      - name: Fetch KernelPatch Headers
+        run: |
+          git clone --recursive https://github.com/bmax121/KernelPatch.git
+      - name: Compile KPM
+        run: |
+          aarch64-linux-gnu-gcc -nostdlib -fno-builtin -fPIC -shared \
+            -I KernelPatch/kpm/include \
+            -o kpm/rt_kpm.kpm kpm/rt_kpm.c
       - uses: actions/upload-artifact@v4
         with:
           name: rt_kpm_driver
-          path: './kpm/*.kpm'
+          path: kpm/rt_kpm.kpm
 
   build-daemon:
     runs-on: ubuntu-22.04
