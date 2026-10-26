@@ -7,31 +7,36 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Setup Android NDK
+      - name: Download Ready-Made KernelPatch SDK
         run: |
-          echo "y" | sudo ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --install "ndk;26.1.10909125" --sdk_root=${ANDROID_SDK_ROOT}
-          
-      - name: Fetch KernelPatch SDK
-        run: |
-          git clone --recursive https://github.com/bmax121/KernelPatch.git
+          LATEST_URL=$(curl -s https://api.github.com/repos/bmax121/KernelPatch/releases/latest | grep "browser_download_url.*kpmsdk-linux-x86_64.zip" | cut -d '"' -f 4)
+          if [ -z "$LATEST_URL" ]; then 
+            LATEST_URL="https://github.com/bmax121/KernelPatch/releases/download/v0.11.2/kpmsdk-linux-x86_64.zip"
+          fi
+          wget "$LATEST_URL" -O kpmsdk.zip
+          unzip kpmsdk.zip
           
       - name: Compile KPM
         run: |
-          CC=${ANDROID_HOME}/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android31-clang
-          $CC -shared -fPIC -I KernelPatch/kpmsdk/include -o kpm/rt_kpm.kpm kpm/rt_kpm.c
+          CC=$PWD/kpmsdk/bin/clang
+          $CC -shared -fPIC -I $PWD/kpmsdk/include -o kpm/rt_kpm.kpm kpm/rt_kpm.c
+          
+      - name: Setup Android NDK
+        run: |
+          echo "y" | sudo ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --install "ndk;26.1.10909125" --sdk_root=${ANDROID_SDK_ROOT}
           
       - name: Build Daemon
         run: |
           CC=${ANDROID_HOME}/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android31-clang
           $CC -O2 -static -pthread -o daemon/nyxd daemon/nyxd.c
           
-      - name: Upload KPM
+      - name: Upload KPM Artifact
         uses: actions/upload-artifact@v4
         with:
           name: rt_kpm_driver
           path: kpm/rt_kpm.kpm
           
-      - name: Upload Daemon
+      - name: Upload Daemon Artifact
         uses: actions/upload-artifact@v4
         with:
           name: nyxd_bin
